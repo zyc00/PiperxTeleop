@@ -51,6 +51,14 @@ class KeyboardConfig:
 
 
 @dataclass
+class InputConfig:
+    # Which TeleopSource to drive with.  The package does not construct sources
+    # itself - the application does - but the preference belongs in the same
+    # file as everything else it is configured with.
+    source: str = "keyboard"          # keyboard | quest | scripted
+
+
+@dataclass
 class QuestConfig:
     port: int = 7777
     host: str = "127.0.0.1"
@@ -62,6 +70,7 @@ class QuestConfig:
 
 @dataclass
 class Config:
+    input: InputConfig = field(default_factory=InputConfig)
     motion: MotionConfig = field(default_factory=MotionConfig)
     workspace: WorkspaceConfig = field(default_factory=WorkspaceConfig)
     rotation: RotationConfig = field(default_factory=RotationConfig)
@@ -72,7 +81,8 @@ class Config:
     def with_(self, **overrides):
         """Return a copy with dotted overrides, e.g. with_(**{'motion.gain': 0.3})."""
         out = Config(**{k: replace(getattr(self, k)) for k in
-                        ("motion", "workspace", "rotation", "safety", "keyboard", "quest")})
+                        ("input", "motion", "workspace", "rotation", "safety",
+                         "keyboard", "quest")})
         for key, val in overrides.items():
             if val is None:
                 continue
@@ -81,7 +91,7 @@ class Config:
         return out
 
 
-_SECTIONS = {"motion": MotionConfig, "workspace": WorkspaceConfig,
+_SECTIONS = {"input": InputConfig, "motion": MotionConfig, "workspace": WorkspaceConfig,
              "rotation": RotationConfig, "safety": SafetyConfig,
              "keyboard": KeyboardConfig, "quest": QuestConfig}
 

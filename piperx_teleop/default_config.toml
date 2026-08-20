@@ -1,6 +1,10 @@
 # Defaults shipped with piperx_teleop. Copy to your project and edit, then
 # load_config("your.toml"). Lengths are METRES, angles DEGREES.
 
+[input]
+# Which input drives the teleop: keyboard | quest | scripted
+source = "keyboard"
+
 [motion]
 gain = 0.5        # operator metres -> robot metres
 max_step = 0.004  # metres the command may advance per control cycle
