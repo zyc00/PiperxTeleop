@@ -30,6 +30,19 @@ keeps control of the process. `run()` is the blocking equivalent.
 Examples: `examples/keyboard_teleop.py`, `examples/vr_teleop.py`,
 `examples/record_episode.py`.
 
+## Command-line helpers
+
+```bash
+piperx-release          # motors AND gripper off - THE ARM WILL FALL
+piperx-release --hold   # freeze in place, torque on
+piperx-release --open   # open the gripper only
+piperx-quest awake      # keep the headset awake off-head
+piperx-quest guardian   # pause the boundary system
+```
+
+`DisableArm` covers joints 1-6 only - the gripper is a separate motor, so a
+plain disable leaves it clamped. `piperx-release` handles both, gripper first.
+
 ## Configuration
 
 `load_config("my.toml")` layers over the packaged defaults; see
