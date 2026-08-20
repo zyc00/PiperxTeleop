@@ -29,6 +29,7 @@ import numpy as np
 from scipy.spatial.transform import Rotation as Rot
 
 from .arm import JOINT_LIMITS, MOVE_P
+from .filters import make_filter
 
 # Identified on hardware by single-joint rotation self-consistency: rotating one
 # wrist joint must produce rotation about a constant axis through that joint's
@@ -125,6 +126,14 @@ class CartesianTeleop:
         # scaled identically. Sources emit raw operator displacement.
         self.gain = cfg.motion.gain
         self.rot_gain = cfg.rotation.gain
+        # Smooth the operator's displacement before it becomes a goal, so the
+        # rate limit and leash act on a clean signal rather than on tremor.
+        f = cfg.filter
+        self._pos_filter = make_filter(f.kind, min_cutoff=f.min_cutoff, beta=f.beta) \
+            if f.kind not in ("none", "off") else None
+        self._rot_filter = make_filter(f.kind, min_cutoff=f.rot_min_cutoff, beta=f.rot_beta) \
+            if f.kind not in ("none", "off") else None
+        self._last_filter_t = None
         self.max_step = cfg.motion.max_step
         self.speed_pct = cfg.motion.speed
         self.max_reach = cfg.workspace.max_reach
@@ -217,7 +226,15 @@ class CartesianTeleop:
         if self.aborted:
             return self.state(clutch=True, t=tick)
 
-        goal = self.anchor_pos + np.asarray(disp_pos, float) * self.gain
+        disp_pos = np.asarray(disp_pos, float)
+        if self._pos_filter is not None:
+            now = tick[1]
+            dt = 0.01 if self._last_filter_t is None else max(now - self._last_filter_t, 1e-4)
+            self._last_filter_t = now
+            disp_pos = self._pos_filter(disp_pos, dt)
+            if disp_rotvec is not None:
+                disp_rotvec = self._rot_filter(np.asarray(disp_rotvec, float), dt)
+        goal = self.anchor_pos + disp_pos * self.gain
         raw_goal = goal.copy()
         clipped = np.clip(goal, self.origin - self.max_reach, self.origin + self.max_reach)
         if np.any(clipped != goal):

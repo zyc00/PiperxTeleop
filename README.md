@@ -73,6 +73,23 @@ tick, never integrated — integrating and clamping lost 87% of a fast motion), 
 the rate limit governs how fast the command *chases* the goal rather than
 deleting motion.
 
+## Smoothing hand tremor
+
+Hand tremor sits around 8-12 Hz, deliberate motion under ~3 Hz, so they separate
+cleanly. Set `filter.kind = "oneeuro"` in the config. Measured on a 0.4 Hz reach
+carrying 4 mm of 10 Hz tremor:
+
+| filter | tremor cut | lag | overshoot on a hard stop |
+|--------|-----------|-----|--------------------------|
+| oneeuro 1.0 / 0.7 | 82% | 115 ms | +0.4 mm |
+| oneeuro 3.0 / 1.5 | 65% | 30 ms | +1.1 mm |
+| kalman q=1 | 70% | 0 ms | +4.0 mm |
+
+A constant-velocity Kalman reaches zero lag by predicting forward - which is
+also why it sails 4 mm past a hard stop. For manipulation, overshoot on a stop
+usually costs more than 30 ms of lag, so `oneeuro` is the default shape. Both
+are available; `filters.py` has the numbers.
+
 ## Gotchas that look like bugs
 
 - **Hand-dragging the arm puts it in teach mode**, after which every command is

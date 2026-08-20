@@ -184,6 +184,61 @@ c2 = c.with_(**{"motion.gain": 0.2, "workspace.min_z": 0.02})
 check("overrides apply", c2.motion.gain == 0.2 and c2.workspace.min_z == 0.02)
 check("overrides do not mutate the original", c.motion.gain == 0.5)
 
+# --- filters: remove tremor, keep intent ------------------------------------
+from piperx_teleop.filters import ConstantVelocityFilter, OneEuroFilter
+
+_fs = 200.0
+_t = np.arange(0, 8, 1 / _fs)
+_intent = 0.15 * np.sin(2 * np.pi * 0.4 * _t)          # deliberate reach
+_sig = np.stack([_intent + 0.004 * np.sin(2 * np.pi * 10.0 * _t),
+                 0 * _t, 0 * _t], axis=1)              # + 10 Hz tremor
+_faxis = np.fft.rfftfreq(len(_t), 1 / _fs)
+
+
+def _amp_at(x, f0):
+    """Amplitude of the single bin nearest f0.
+
+    Summing a band instead leaks the large 0.4 Hz component into the tremor
+    measurement and makes a working filter look useless - which it did.
+    """
+    X = np.fft.rfft(x - x.mean())
+    return 2 * np.abs(X[np.argmin(np.abs(_faxis - f0))]) / len(x)
+
+
+_raw_tremor = _amp_at(_sig[:, 0], 10.0)
+_raw_intent = _amp_at(_sig[:, 0], 0.4)
+
+_oe = OneEuroFilter(3.0, 1.5)
+_out = np.array([_oe(_sig[i], 1 / _fs) for i in range(len(_t))])[:, 0]
+check("one-euro attenuates tremor", _amp_at(_out, 10.0) < 0.5 * _raw_tremor)
+check("one-euro preserves the intended motion",
+      abs(_amp_at(_out, 0.4) - _raw_intent) / _raw_intent < 0.05)
+
+_cv = ConstantVelocityFilter(1.0, 1e-4)
+_outk = np.array([_cv(_sig[i], 1 / _fs) for i in range(len(_t))])[:, 0]
+check("kalman attenuates tremor", _amp_at(_outk, 10.0) < 0.5 * _raw_tremor)
+
+# Prediction is what buys the Kalman its zero lag, and it is also why it sails
+# past a hard stop. Guard the property that made us prefer one-euro.
+_ts = np.arange(0, 6, 1 / _fs)
+_ramp = np.clip((_ts - 1) / 2, 0, 1) * 0.15
+_stop = np.stack([_ramp + 0.004 * np.sin(2 * np.pi * 10 * _ts), 0 * _ts, 0 * _ts], 1)
+
+
+def _overshoot(filt):
+    o = np.array([filt(_stop[i], 1 / _fs) for i in range(len(_ts))])[:, 0]
+    return (o[_ts >= 3].max() - 0.15) * 1000
+
+
+check("one-euro overshoots a stop by under 2 mm", _overshoot(OneEuroFilter(3.0, 1.5)) < 2.0)
+check("kalman overshoots more than one-euro",
+      _overshoot(ConstantVelocityFilter(1.0, 1e-4)) > _overshoot(OneEuroFilter(3.0, 1.5)))
+
+check("filtering off by default", CartesianTeleop(FakeArm(), Config())._pos_filter is None)
+_cfgf = Config(); _cfgf.filter.kind = "oneeuro"
+check("filter constructed when configured",
+      CartesianTeleop(FakeArm(), _cfgf)._pos_filter is not None)
+
 # --- both gains applied in one place, identically for every source ----------
 cfgg = Config(); cfgg.motion.gain = 0.5; cfgg.rotation.unlock = True
 cfgg.rotation.gain = 0.5; cfgg.rotation.max_step = 90.0
@@ -222,7 +277,7 @@ finally:
     _sys.stdin = _old
 check("keyboard reads all keys, not just the first", seen == ["w", "up", "s"])
 
-print("%d passed, %d failed" % (31 - len(fails), len(fails)))
+print("%d passed, %d failed" % (38 - len(fails), len(fails)))
 for f in fails:
     print("  FAIL:", f)
 sys.exit(1 if fails else 0)

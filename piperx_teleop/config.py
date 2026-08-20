@@ -37,6 +37,19 @@ class RotationConfig:
 
 
 @dataclass
+class FilterConfig:
+    # Smoothing of the operator's displacement, for hand-tracked input.
+    # "oneeuro" adapts its cutoff to speed: heavy smoothing when nearly still
+    # (tremor dominates, lag is imperceptible), little when moving fast (lag is
+    # what you feel). "kalman" is a constant-velocity model with fixed lag.
+    kind: str = "none"            # none | oneeuro | kalman
+    min_cutoff: float = 3.0       # Hz, smoothing at rest. Lower = steadier.
+    beta: float = 1.5             # how fast the cutoff opens with speed
+    rot_min_cutoff: float = 3.0
+    rot_beta: float = 1.5
+
+
+@dataclass
 class SafetyConfig:
     # Do not raise these to work around a stall - they are what turn a firmware
     # IK branch flip into a 2 deg twitch instead of a swing.
@@ -74,6 +87,7 @@ class Config:
     motion: MotionConfig = field(default_factory=MotionConfig)
     workspace: WorkspaceConfig = field(default_factory=WorkspaceConfig)
     rotation: RotationConfig = field(default_factory=RotationConfig)
+    filter: FilterConfig = field(default_factory=FilterConfig)
     safety: SafetyConfig = field(default_factory=SafetyConfig)
     keyboard: KeyboardConfig = field(default_factory=KeyboardConfig)
     quest: QuestConfig = field(default_factory=QuestConfig)
@@ -81,8 +95,8 @@ class Config:
     def with_(self, **overrides):
         """Return a copy with dotted overrides, e.g. with_(**{'motion.gain': 0.3})."""
         out = Config(**{k: replace(getattr(self, k)) for k in
-                        ("input", "motion", "workspace", "rotation", "safety",
-                         "keyboard", "quest")})
+                        ("input", "motion", "workspace", "rotation", "filter",
+                         "safety", "keyboard", "quest")})
         for key, val in overrides.items():
             if val is None:
                 continue
@@ -92,7 +106,8 @@ class Config:
 
 
 _SECTIONS = {"input": InputConfig, "motion": MotionConfig, "workspace": WorkspaceConfig,
-             "rotation": RotationConfig, "safety": SafetyConfig,
+             "rotation": RotationConfig, "filter": FilterConfig,
+             "safety": SafetyConfig,
              "keyboard": KeyboardConfig, "quest": QuestConfig}
 
 

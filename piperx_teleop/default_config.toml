@@ -20,6 +20,26 @@ gain = 0.4
 deadband = 6.0    # ignore wrist rotation below this
 max_step = 1.5    # degrees of tool rotation per control cycle
 
+[filter]
+# Smoothing of the operator's displacement. Hand tremor is ~8-12 Hz; deliberate
+# motion is under ~3 Hz, so they separate cleanly.
+#   none     raw input
+#   oneeuro  cutoff adapts to speed - steady at rest, responsive when moving
+#   kalman   constant-velocity model, fixed lag regardless of speed
+# Measured on a 0.4 Hz reach carrying 4 mm of 10 Hz tremor:
+#                       tremor cut   lag     overshoot on a hard stop
+#   oneeuro 1.0 / 0.7      82%      115 ms      +0.4 mm
+#   oneeuro 3.0 / 1.5      65%       30 ms      +1.1 mm   <- recommended
+#   kalman  q=1            70%        0 ms      +4.0 mm
+# The Kalman reaches zero lag by predicting forward, which is also why it sails
+# past a hard stop - bad when you are placing something. Prefer oneeuro unless
+# lag matters more than precision.
+kind = "none"
+min_cutoff = 3.0    # Hz at rest; lower = steadier but laggier when slow
+beta = 1.5          # higher = opens up faster when you move
+rot_min_cutoff = 3.0
+rot_beta = 1.5
+
 [safety]
 max_joint_step = 2.0  # abort if a joint moves more than this in one cycle
 lead_limit = 0.04     # how far the command may lead the arm's actual pose
