@@ -103,12 +103,23 @@ class ConstantVelocityFilter:
         return out
 
 
+# Each filter takes only its own parameters, so the config can carry both sets
+# and `kind` selects which are used. Passing the wrong set used to raise.
+_PARAMS = {
+    "oneeuro": ("min_cutoff", "beta", "d_cutoff"),
+    "kalman": ("process_var", "meas_var"),
+}
+_ALIASES = {"one_euro": "oneeuro", "1euro": "oneeuro",
+            "cv": "kalman", "constant_velocity": "kalman"}
+
+
 def make_filter(kind, dim=3, **kw):
-    kind = (kind or "none").lower()
+    kind = _ALIASES.get((kind or "none").lower(), (kind or "none").lower())
     if kind in ("none", "off"):
         return None
-    if kind in ("oneeuro", "one_euro", "1euro"):
-        return OneEuroFilter(dim=dim, **kw)
-    if kind in ("kalman", "cv", "constant_velocity"):
-        return ConstantVelocityFilter(dim=dim, **kw)
-    raise ValueError("unknown filter %r" % kind)
+    if kind not in _PARAMS:
+        raise ValueError("unknown filter %r; expected one of none, %s"
+                         % (kind, ", ".join(sorted(_PARAMS))))
+    args = {k: v for k, v in kw.items() if k in _PARAMS[kind]}
+    cls = OneEuroFilter if kind == "oneeuro" else ConstantVelocityFilter
+    return cls(dim=dim, **args)

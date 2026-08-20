@@ -43,10 +43,21 @@ class FilterConfig:
     # (tremor dominates, lag is imperceptible), little when moving fast (lag is
     # what you feel). "kalman" is a constant-velocity model with fixed lag.
     kind: str = "none"            # none | oneeuro | kalman
+
+    # --- oneeuro ---
     min_cutoff: float = 3.0       # Hz, smoothing at rest. Lower = steadier.
     beta: float = 1.5             # how fast the cutoff opens with speed
     rot_min_cutoff: float = 3.0
     rot_beta: float = 1.5
+
+    # --- kalman (constant-velocity) ---
+    # process_var: how much acceleration the model expects. LOWER = smoother and
+    #   more predictive, which also means more overshoot when you stop.
+    # meas_var: assumed input noise. HIGHER = trusts the model over the input.
+    process_var: float = 1.0
+    meas_var: float = 1e-4
+    rot_process_var: float = 1.0
+    rot_meas_var: float = 1e-4
 
 
 @dataclass

@@ -239,6 +239,28 @@ _cfgf = Config(); _cfgf.filter.kind = "oneeuro"
 check("filter constructed when configured",
       CartesianTeleop(FakeArm(), _cfgf)._pos_filter is not None)
 
+# every kind selectable from config must actually construct: the config carries
+# both parameter sets, and passing the wrong set to a filter used to raise
+for _kind in ("oneeuro", "kalman", "none"):
+    _c = Config(); _c.filter.kind = _kind
+    try:
+        _t2 = CartesianTeleop(FakeArm(), _c)
+        _ok = (_t2._pos_filter is None) if _kind == "none" else (_t2._pos_filter is not None)
+    except Exception:
+        _ok = False
+    check("filter kind %r selectable from config" % _kind, _ok)
+
+_cb = Config(); _cb.filter.kind = "nonsense"
+try:
+    CartesianTeleop(FakeArm(), _cb); _ok = False
+except ValueError:
+    _ok = True
+check("unknown filter kind raises a clear error", _ok)
+
+_ck = Config(); _ck.filter.kind = "kalman"; _ck.filter.process_var = 0.2
+check("kalman params reach the filter",
+      CartesianTeleop(FakeArm(), _ck)._pos_filter.q == 0.2)
+
 # --- both gains applied in one place, identically for every source ----------
 cfgg = Config(); cfgg.motion.gain = 0.5; cfgg.rotation.unlock = True
 cfgg.rotation.gain = 0.5; cfgg.rotation.max_step = 90.0
@@ -277,7 +299,7 @@ finally:
     _sys.stdin = _old
 check("keyboard reads all keys, not just the first", seen == ["w", "up", "s"])
 
-print("%d passed, %d failed" % (38 - len(fails), len(fails)))
+print("%d passed, %d failed" % (43 - len(fails), len(fails)))
 for f in fails:
     print("  FAIL:", f)
 sys.exit(1 if fails else 0)

@@ -35,10 +35,19 @@ max_step = 1.5    # degrees of tool rotation per control cycle
 # past a hard stop - bad when you are placing something. Prefer oneeuro unless
 # lag matters more than precision.
 kind = "none"
+
+# oneeuro
 min_cutoff = 3.0    # Hz at rest; lower = steadier but laggier when slow
 beta = 1.5          # higher = opens up faster when you move
 rot_min_cutoff = 3.0
 rot_beta = 1.5
+
+# kalman (constant-velocity). Lower process_var = smoother and more predictive,
+# which also means more overshoot when you stop.
+process_var = 1.0
+meas_var = 1e-4
+rot_process_var = 1.0
+rot_meas_var = 1e-4
 
 [safety]
 max_joint_step = 2.0  # abort if a joint moves more than this in one cycle

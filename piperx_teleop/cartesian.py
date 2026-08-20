@@ -129,10 +129,10 @@ class CartesianTeleop:
         # Smooth the operator's displacement before it becomes a goal, so the
         # rate limit and leash act on a clean signal rather than on tremor.
         f = cfg.filter
-        self._pos_filter = make_filter(f.kind, min_cutoff=f.min_cutoff, beta=f.beta) \
-            if f.kind not in ("none", "off") else None
-        self._rot_filter = make_filter(f.kind, min_cutoff=f.rot_min_cutoff, beta=f.rot_beta) \
-            if f.kind not in ("none", "off") else None
+        self._pos_filter = make_filter(f.kind, min_cutoff=f.min_cutoff, beta=f.beta,
+                                       process_var=f.process_var, meas_var=f.meas_var)
+        self._rot_filter = make_filter(f.kind, min_cutoff=f.rot_min_cutoff, beta=f.rot_beta,
+                                       process_var=f.rot_process_var, meas_var=f.rot_meas_var)
         self._last_filter_t = None
         self.max_step = cfg.motion.max_step
         self.speed_pct = cfg.motion.speed
