@@ -1,0 +1,33 @@
+# Defaults shipped with piperx_teleop. Copy to your project and edit, then
+# load_config("your.toml"). Lengths are METRES, angles DEGREES.
+
+[motion]
+gain = 0.5        # operator metres -> robot metres
+max_step = 0.004  # metres the command may advance per control cycle
+speed = 20        # firmware MOVE speed percent (vendor demos use 100; reckless)
+
+[workspace]
+max_reach = 0.30  # box half-size measured from WHERE THE SESSION STARTS
+min_z = 0.05      # hard floor above the base plane; your collision guard
+
+[rotation]
+unlock = false
+gain = 0.4
+deadband = 6.0    # ignore wrist rotation below this
+max_step = 1.5    # degrees of tool rotation per control cycle
+
+[safety]
+max_joint_step = 2.0  # abort if a joint moves more than this in one cycle
+lead_limit = 0.04     # how far the command may lead the arm's actual pose
+
+[keyboard]
+step = 0.005
+rot_step = 3.0
+
+[quest]
+port = 7777
+host = "127.0.0.1"
+adb_reverse = true
+frame_mode = "between_clutch"
+clutch_threshold = 0.5
+gripper_threshold = 0.75

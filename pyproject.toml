@@ -1,0 +1,22 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "piperx-teleop"
+version = "0.1.0"
+description = "Cartesian teleoperation for the AgileX Piper (piperx) arm"
+readme = "README.md"
+requires-python = ">=3.10"
+authors = [{name = "yuchen"}]
+dependencies = ["numpy>=1.24", "scipy>=1.10", "piper_sdk>=0.6"]
+
+[project.optional-dependencies]
+# Quest 3 input needs RoboVR; the core and the keyboard source do not.
+quest = ["robovr>=0.1"]
+
+[tool.setuptools.packages.find]
+include = ["piperx_teleop*"]
+
+[tool.setuptools.package-data]
+piperx_teleop = ["default_config.toml"]
