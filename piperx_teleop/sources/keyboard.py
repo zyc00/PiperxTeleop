@@ -5,6 +5,7 @@ and as the reference implementation of TeleopSource - it isolates the arm from
 any tracking question, which is how we proved the arm side was sound.
 """
 
+import os
 import select
 import sys
 import termios
@@ -69,10 +70,20 @@ class KeyboardSource:
             termios.tcsetattr(self._fd, termios.TCSADRAIN, self._old)
             self._old = None
 
+    def _read1(self):
+        """One byte straight off the fd.
+
+        Deliberately NOT sys.stdin.read(1): that goes through Python's buffered
+        text wrapper while select() polls the raw descriptor, so once the
+        underlying read pulls several bytes into the buffer, select reports "no
+        data" and every key after the first is stranded there.
+        """
+        return os.read(self._fd, 1).decode("utf-8", "ignore")
+
     def _getkey(self):
-        if not select.select([sys.stdin], [], [], 0)[0]:
+        if not select.select([self._fd], [], [], 0)[0]:
             return None
-        c = sys.stdin.read(1)
+        c = self._read1()
         if c != "\x1b":
             return c
         # Arrow keys arrive as ESC [ A/B/C/D; the tail can lag the ESC by a few
@@ -80,8 +91,8 @@ class KeyboardSource:
         seq = ""
         t0 = time.time()
         while len(seq) < 2 and time.time() - t0 < 0.05:
-            if select.select([sys.stdin], [], [], 0.01)[0]:
-                seq += sys.stdin.read(1)
+            if select.select([self._fd], [], [], 0.01)[0]:
+                seq += self._read1()
         return ARROWS.get(seq, "esc")
 
     def poll(self):

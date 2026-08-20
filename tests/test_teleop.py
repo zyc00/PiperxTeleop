@@ -185,7 +185,32 @@ c2 = c.with_(**{"motion.gain": 0.2, "workspace.min_z": 0.02})
 check("overrides apply", c2.motion.gain == 0.2 and c2.workspace.min_z == 0.02)
 check("overrides do not mutate the original", c.motion.gain == 0.5)
 
-print("%d passed, %d failed" % (28 - len(fails), len(fails)))
+# --- keyboard reads every key, not just the first --------------------------
+import os as _os
+import pty as _pty
+import sys as _sys
+
+from piperx_teleop.sources import KeyboardSource
+
+_master, _slave = _pty.openpty()
+_old = _sys.stdin
+_sys.stdin = _os.fdopen(_slave, "r")
+try:
+    ks = KeyboardSource(Config()).start()
+    _os.write(_master, b"w\x1b[A" + b"s")      # w, arrow-up, s
+    _time.sleep(0.05)
+    seen = []
+    for _ in range(20):
+        k = ks._getkey()
+        if k:
+            seen.append(k)
+        _time.sleep(0.005)
+    ks.stop()
+finally:
+    _sys.stdin = _old
+check("keyboard reads all keys, not just the first", seen == ["w", "up", "s"])
+
+print("%d passed, %d failed" % (29 - len(fails), len(fails)))
 for f in fails:
     print("  FAIL:", f)
 sys.exit(1 if fails else 0)
