@@ -121,7 +121,10 @@ class CartesianTeleop:
         self.cfg = cfg
         self.move_mode = move_mode
 
+        # Both gains are applied HERE, not in the sources, so every source is
+        # scaled identically. Sources emit raw operator displacement.
         self.gain = cfg.motion.gain
+        self.rot_gain = cfg.rotation.gain
         self.max_step = cfg.motion.max_step
         self.speed_pct = cfg.motion.speed
         self.max_reach = cfg.workspace.max_reach
@@ -203,7 +206,13 @@ class CartesianTeleop:
     # ---------- the control law ----------
 
     def follow(self, disp_pos, disp_rotvec=None, dry_run=False):
-        """Advance toward the goal implied by the operator's total displacement."""
+        """Advance toward the goal implied by the operator's total displacement.
+
+        `disp_pos` and `disp_rotvec` are RAW operator displacement since the
+        clutch engaged; motion.gain and rotation.gain are applied here, so every
+        source is scaled the same way.  A source already emitting robot metres
+        should run with gain 1.0.
+        """
         tick = (time.time(), time.monotonic())
         if self.aborted:
             return self.state(clutch=True, t=tick)
@@ -241,7 +250,7 @@ class CartesianTeleop:
         self.target = self.cmd_pos
 
         if disp_rotvec is not None and not self.lock_rotation:
-            self._advance_rotation(np.asarray(disp_rotvec, float))
+            self._advance_rotation(np.asarray(disp_rotvec, float) * self.rot_gain)
 
         if not dry_run:
             self.arm.end_pose_ctrl(self.target, self.rot, self.move_mode, self.speed_pct)

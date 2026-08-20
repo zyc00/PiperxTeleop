@@ -1,5 +1,6 @@
 """Offline tests. No hardware, no headset."""
 import sys
+import time as _time
 
 import numpy as np
 from scipy.spatial.transform import Rotation as Rot
@@ -7,9 +8,6 @@ from scipy.spatial.transform import Rotation as Rot
 from piperx_teleop import CartesianTeleop, Config, TeleopSession, load_config
 from piperx_teleop.cartesian import EULER_SEQ
 from piperx_teleop.sources import TeleopSample
-
-
-import time as _time
 
 
 class FakeArm:
@@ -108,6 +106,7 @@ check("watchdog fires on a joint jump", (not ctl.check_joints()) and ctl.aborted
 
 # --- rotation ----------------------------------------------------------------
 cfg5 = Config(); cfg5.rotation.unlock = True; cfg5.rotation.max_step = 90.0
+cfg5.rotation.gain = 1.0        # this case tests composition, not scaling
 arm = FakeArm(); ctl = CartesianTeleop(arm, cfg5).start()
 want = np.radians([0, 0, 20.0])
 for _ in range(50):
@@ -185,6 +184,19 @@ c2 = c.with_(**{"motion.gain": 0.2, "workspace.min_z": 0.02})
 check("overrides apply", c2.motion.gain == 0.2 and c2.workspace.min_z == 0.02)
 check("overrides do not mutate the original", c.motion.gain == 0.5)
 
+# --- both gains applied in one place, identically for every source ----------
+cfgg = Config(); cfgg.motion.gain = 0.5; cfgg.rotation.unlock = True
+cfgg.rotation.gain = 0.5; cfgg.rotation.max_step = 90.0
+arm = FakeArm(); ctl = CartesianTeleop(arm, cfgg).start()
+for _ in range(80):
+    ctl.follow(np.array([0.10, 0, 0]), np.radians([0, 0, 20.0]))
+check("motion gain applied by the controller",
+      abs((ctl.target - ctl.origin)[0] - 0.05) < 0.002)
+R_end = Rot.from_euler(EULER_SEQ, arm.rpy, degrees=True)
+R_ref = Rot.from_euler(EULER_SEQ, ctl.anchor_rot, degrees=True)
+ang = np.degrees(np.linalg.norm((R_end * R_ref.inv()).as_rotvec()))
+check("rotation gain applied by the controller", abs(ang - 10.0) < 1.0)
+
 # --- keyboard reads every key, not just the first --------------------------
 import os as _os
 import pty as _pty
@@ -210,7 +222,7 @@ finally:
     _sys.stdin = _old
 check("keyboard reads all keys, not just the first", seen == ["w", "up", "s"])
 
-print("%d passed, %d failed" % (29 - len(fails), len(fails)))
+print("%d passed, %d failed" % (31 - len(fails), len(fails)))
 for f in fails:
     print("  FAIL:", f)
 sys.exit(1 if fails else 0)

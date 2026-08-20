@@ -187,7 +187,9 @@ class QuestSource:
             # not jump.  Without a deadband here, incidental wrist rotation while
             # translating drove the wrist through 122 deg.
             rv = np.zeros(3) if mag <= db else rv / mag * (mag - db)
-            out.disp_rotvec = self._to_robot(rv) * self.rot.gain
+            # Raw operator rotation; rotation.gain is applied by CartesianTeleop
+            # so that every source is scaled the same way.
+            out.disp_rotvec = self._to_robot(rv)
         out.info["tracking_suspect"] = self.tracking_suspect()
         return out
 
