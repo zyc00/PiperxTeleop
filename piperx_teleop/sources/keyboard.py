@@ -57,6 +57,11 @@ class KeyboardSource:
         self._fd = sys.stdin.fileno()
         self._old = termios.tcgetattr(self._fd)
         tty.setcbreak(self._fd)
+        # setcbreak drops line buffering but leaves ECHO on, so every keystroke
+        # would print into the caller's status line.
+        attrs = termios.tcgetattr(self._fd)
+        attrs[3] &= ~termios.ECHO
+        termios.tcsetattr(self._fd, termios.TCSADRAIN, attrs)
         return self
 
     def stop(self):
