@@ -338,14 +338,37 @@ try:
     check("JointImpedance constructs; per-joint gain broadcast",
           imp.kp.shape == (6,) and imp.kd.shape == (6,))
     imp.set_target(np.radians([0, 10, -10, 0, 0, 0]))
-    tau, pd = imp._torques(np.zeros(6))
-    check("impedance law: gravity ff + firmware PD triple",
-          pd is not None and np.allclose(pd[0], np.radians([0, 10, -10, 0, 0, 0])))
+    from piperx_teleop import ArmState as _AS
+    cmd = imp._law(_AS(q=np.zeros(6), qdot=np.zeros(6), t=0.0))
+    check("impedance law: gravity t_ff + firmware PD target",
+          np.allclose(cmd.p_des, np.radians([0, 10, -10, 0, 0, 0]))
+          and cmd.t_ff is not None)
 except RuntimeError:
     check("(JointImpedance skipped: unpatched env)", True)
     check("(JointImpedance skipped: unpatched env)", True)
 
-print("%d passed, %d failed" % (52 - len(fails), len(fails)))
+try:
+    from piperx_teleop import TorqueSession, ArmState, MitCommand
+
+    calls = []
+    def custom_law(s):
+        calls.append(s)
+        return m.gravity_torque(s.q) + 0.1        # user term composed on gravity
+
+    sess = TorqueSession(custom_law, arm=_GCArm())
+    st = ArmState(q=np.zeros(6), qdot=np.zeros(6), t=0.0)
+    tau = sess.law(st)
+    check("TorqueSession takes an arbitrary law; law sees ArmState",
+          len(calls) == 1 and tau.shape == (6,))
+    cmd = MitCommand(t_ff=np.ones(6), kp=5.0)
+    tf, pdes, vdes, kp, kd = cmd.arrays()
+    check("MitCommand broadcasts scalars and zero-fills omitted fields",
+          np.allclose(kp, 5.0) and np.allclose(pdes, 0) and np.allclose(tf, 1))
+except RuntimeError:
+    check("(TorqueSession skipped: unpatched env)", True)
+    check("(TorqueSession skipped: unpatched env)", True)
+
+print("%d passed, %d failed" % (54 - len(fails), len(fails)))
 for f in fails:
     print("  FAIL:", f)
 sys.exit(1 if fails else 0)
