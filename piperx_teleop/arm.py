@@ -13,12 +13,15 @@ RAD2CMD = 1000.0 * 180.0 / np.pi       # rad -> SDK 0.001 deg
 CMD2RAD = 1.0 / RAD2CMD
 
 # URDF joint limits, applied as a clamp on every outgoing joint command.
+# PiPER-X limits (agx_arm_urdf piper_x_description.urdf). The plain piper's
+# table (J4 +/-100 deg, J5 +/-70 deg) is a different robot: on this arm J4 and
+# J5 are both +/-89 deg - the firmware clamps there itself.
 JOINT_LIMITS = np.array([
     [-2.618, 2.618],
     [0.0, 3.14],
     [-2.967, 0.0],
-    [-1.745, 1.745],
-    [-1.22, 1.22],
+    [-1.553, 1.553],
+    [-1.553, 1.553],
     [-2.0944, 2.0944],
 ])
 
@@ -159,7 +162,10 @@ class PiperArm:
 
     def move_j(self, q, speed_pct=20):
         q = self.clamp(q)
-        self.piper.MotionCtrl_2(0x01, MOVE_J, int(speed_pct), 0x00)
+        # installation_pos=0x01 (upright): this field feeds the firmware's
+        # gravity model for teach/drag mode, and 0x00 means "invalid" - a
+        # stream of 0x00 here degrades the teach-mode compensation.
+        self.piper.MotionCtrl_2(0x01, MOVE_J, int(speed_pct), 0x00, 0, 0x01)
         self.piper.JointCtrl(*[int(round(v * RAD2CMD)) for v in q])
 
     def move_to(self, q, speed_pct=15, tol_deg=1.2, timeout=20.0):
@@ -174,7 +180,7 @@ class PiperArm:
         return False
 
     def end_pose_ctrl(self, pos, rpy, move_mode=MOVE_P, speed_pct=20):
-        self.piper.MotionCtrl_2(0x01, move_mode, int(speed_pct), 0x00)
+        self.piper.MotionCtrl_2(0x01, move_mode, int(speed_pct), 0x00, 0, 0x01)
         self.piper.EndPoseCtrl(int(round(pos[0] * 1e6)), int(round(pos[1] * 1e6)),
                                int(round(pos[2] * 1e6)), int(round(rpy[0] * 1e3)),
                                int(round(rpy[1] * 1e3)), int(round(rpy[2] * 1e3)))

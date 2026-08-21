@@ -88,3 +88,29 @@ def quest(argv=None):
 
 if __name__ == "__main__":       # pragma: no cover
     sys.exit(release())
+
+
+def drag():
+    """Console entry: gravity-compensated drag mode until Ctrl-C."""
+    import argparse
+
+    import numpy as np
+
+    from .gravity import GravityCompensator
+
+    ap = argparse.ArgumentParser(
+        description="Gravity-compensated drag mode: the arm becomes freely "
+                    "draggable and holds wherever you leave it. Ctrl-C exits "
+                    "into position hold.")
+    ap.add_argument("--can", default="can0")
+    ap.add_argument("--duration", type=float, default=0.0,
+                    help="seconds; 0 = until Ctrl-C")
+    ap.add_argument("--payload-mass", type=float, default=0.0,
+                    help="kg carried by the gripper, added to the model")
+    a = ap.parse_args()
+
+    gc = GravityCompensator(can=a.can, payload_mass=a.payload_mass)
+    print("pose (deg)   :", np.degrees(gc.q()).round(1))
+    print("gravity (N.m):", gc.gravity().round(2))
+    trip = gc.run(duration=a.duration)
+    print("position hold restored" + (" (%s)" % trip if trip else ""))

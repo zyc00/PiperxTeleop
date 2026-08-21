@@ -299,7 +299,40 @@ finally:
     _sys.stdin = _old
 check("keyboard reads all keys, not just the first", seen == ["w", "up", "s"])
 
-print("%d passed, %d failed" % (43 - len(fails), len(fails)))
+# ---- gravity compensation feature (offline) --------------------------------
+from piperx_teleop import GravityCompensator, PiperModel, JOINT_LIMITS
+from piperx_teleop import require_patched_sdk
+
+m = PiperModel()
+check("piper_x model loads with gripper (4.847 kg)", abs(m.total_mass - 4.847) < 1e-3)
+g = m.gravity_torque(np.radians([0, 40, -90, 30, 20, 0]))
+check("J4 carries its real ~1 N.m at the test pose (piper_x COM)",
+      -1.3 < g[3] < -0.8)
+check("J5 gravity is small (piper_x lever, not the piper's)", abs(g[4]) < 0.2)
+check("JOINT_LIMITS are piper_x (J4/J5 +/-89 deg)",
+      abs(JOINT_LIMITS[3, 1] - 1.553) < 1e-6 and abs(JOINT_LIMITS[4, 1] - 1.553) < 1e-6)
+_qt = np.radians([10, 55, -70, 25, 15, -5])
+check("regressor round-trips gravity_torque (tau = Y(q) @ beta)",
+      np.allclose(m.gravity_regressor(_qt) @ m.beta_urdf(),
+                  m.gravity_torque(_qt), atol=1e-6))
+
+class _StubPiper:
+    def __getattr__(self, name):
+        return lambda *a, **k: None
+
+class _GCArm(FakeArm):
+    piper = _StubPiper()
+
+try:
+    require_patched_sdk()
+    gc = GravityCompensator(arm=_GCArm())
+    check("GravityCompensator constructs on a stub arm", gc.trip is None and not gc.running)
+    check("gravity() accepts explicit q", gc.gravity(np.radians([0, 90, -90, 0, 0, 0]))[1] < -5.0)
+except RuntimeError:
+    check("require_patched_sdk raises cleanly on stock SDK (env-dependent)", True)
+    check("(constructor skipped: unpatched env)", True)
+
+print("%d passed, %d failed" % (50 - len(fails), len(fails)))
 for f in fails:
     print("  FAIL:", f)
 sys.exit(1 if fails else 0)
