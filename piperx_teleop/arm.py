@@ -160,12 +160,20 @@ class PiperArm:
     def clamp(self, q):
         return np.clip(np.asarray(q, float), JOINT_LIMITS[:, 0], JOINT_LIMITS[:, 1])
 
+    def _install_pos(self):
+        """installation_pos for MotionCtrl_2: assert 0x01 (upright) exactly
+        ONCE, on the first commanded motion. Streaming it at the 100 Hz
+        command rate makes the firmware re-seed IK/gravity state mid-motion
+        (measured: J1 branch-flip jumps during Cartesian teleop that vanish
+        on the pre-0.2.0 package). 0x00 afterwards means "no change"."""
+        if getattr(self, "_install_sent", False):
+            return 0x00
+        self._install_sent = True
+        return 0x01
+
     def move_j(self, q, speed_pct=20):
         q = self.clamp(q)
-        # installation_pos=0x01 (upright): this field feeds the firmware's
-        # gravity model for teach/drag mode, and 0x00 means "invalid" - a
-        # stream of 0x00 here degrades the teach-mode compensation.
-        self.piper.MotionCtrl_2(0x01, MOVE_J, int(speed_pct), 0x00, 0, 0x01)
+        self.piper.MotionCtrl_2(0x01, MOVE_J, int(speed_pct), 0x00, 0, self._install_pos())
         self.piper.JointCtrl(*[int(round(v * RAD2CMD)) for v in q])
 
     def move_to(self, q, speed_pct=15, tol_deg=1.2, timeout=20.0):
@@ -180,7 +188,7 @@ class PiperArm:
         return False
 
     def end_pose_ctrl(self, pos, rpy, move_mode=MOVE_P, speed_pct=20):
-        self.piper.MotionCtrl_2(0x01, move_mode, int(speed_pct), 0x00, 0, 0x01)
+        self.piper.MotionCtrl_2(0x01, move_mode, int(speed_pct), 0x00, 0, self._install_pos())
         self.piper.EndPoseCtrl(int(round(pos[0] * 1e6)), int(round(pos[1] * 1e6)),
                                int(round(pos[2] * 1e6)), int(round(rpy[0] * 1e3)),
                                int(round(rpy[1] * 1e3)), int(round(rpy[2] * 1e3)))
