@@ -332,7 +332,20 @@ except RuntimeError:
     check("require_patched_sdk raises cleanly on stock SDK (env-dependent)", True)
     check("(constructor skipped: unpatched env)", True)
 
-print("%d passed, %d failed" % (50 - len(fails), len(fails)))
+try:
+    from piperx_teleop import JointImpedance
+    imp = JointImpedance(arm=_GCArm(), kp=8.0, kd=0.8, q_ref=np.zeros(6))
+    check("JointImpedance constructs; per-joint gain broadcast",
+          imp.kp.shape == (6,) and imp.kd.shape == (6,))
+    imp.set_target(np.radians([0, 10, -10, 0, 0, 0]))
+    tau, pd = imp._torques(np.zeros(6))
+    check("impedance law: gravity ff + firmware PD triple",
+          pd is not None and np.allclose(pd[0], np.radians([0, 10, -10, 0, 0, 0])))
+except RuntimeError:
+    check("(JointImpedance skipped: unpatched env)", True)
+    check("(JointImpedance skipped: unpatched env)", True)
+
+print("%d passed, %d failed" % (52 - len(fails), len(fails)))
 for f in fails:
     print("  FAIL:", f)
 sys.exit(1 if fails else 0)

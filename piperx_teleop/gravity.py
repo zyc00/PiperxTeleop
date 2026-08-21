@@ -212,9 +212,15 @@ class GravityCompensator:
             qdot = (q - q_prev) / max(tick - t_prev, 1e-3)
             q_prev, t_prev = q, tick
 
-            tau = self.mdl.gravity_torque(q)
-            for j in range(6):
-                self.piper.JointMitCtrl(j + 1, 0.0, 0.0, 0.0, 0.0, float(tau[j]))
+            tau, pd = self._torques(q)
+            if pd is None:
+                for j in range(6):
+                    self.piper.JointMitCtrl(j + 1, 0.0, 0.0, 0.0, 0.0, float(tau[j]))
+            else:
+                p_des, kp, kd = pd
+                for j in range(6):
+                    self.piper.JointMitCtrl(j + 1, float(p_des[j]), 0.0,
+                                            float(kp[j]), float(kd[j]), float(tau[j]))
 
             if (np.abs(qdot) > VMAX).any():
                 over += 1
@@ -229,6 +235,10 @@ class GravityCompensator:
             if elapsed < period:
                 time.sleep(period - elapsed)
 
+    def _torques(self, q):
+        """Override point: what to command at pose q. Base class = pure drag."""
+        return self.mdl.gravity_torque(q), None   # (t_ff, p_des/kp/kd triple)
+
     def _recover(self, q):
         """AgileX's own exit path: MIT PD catch, then the position loop."""
         self._recovered.set()
@@ -242,3 +252,62 @@ class GravityCompensator:
         for _ in range(30):
             self.arm.move_j(q, speed_pct=20)
             time.sleep(0.01)
+
+
+class JointImpedance(GravityCompensator):
+    """Joint-space impedance: a virtual spring-damper on top of gravity comp.
+
+        tau = G(q) + Kp*(q_ref - q) - Kd*qdot      (PD computed BY THE FIRMWARE
+                                                    at motor rate via the MIT
+                                                    frame's p_des/kp/kd fields)
+
+    Kp = 0 degrades to drag mode; stiffer Kp holds poses against pushes and
+    springs back. This is the compliant-follower building block for
+    leader-follower teleop: stream the leader's pose into set_target() and the
+    follower tracks it softly instead of rigidly.
+
+        imp = JointImpedance(kp=8.0)
+        with imp:                       # holds the current pose compliantly
+            imp.move_to(q_goal, secs=2) # compliant motion between poses
+            imp.set_target(q)           # or stream targets at your own rate
+
+    Gain units are the firmware's own (roughly N.m/rad at the joint, but the
+    per-joint scaling is not uniform - J3 responds noticeably stronger than
+    J2). Start soft, raise until the hold feels right.
+    """
+
+    def __init__(self, arm=None, can="can0", model=None, hz=200.0,
+                 kp=8.0, kd=0.8, q_ref=None,
+                 payload_mass=0.0, payload_com=(0.0, 0.0, 0.0)):
+        super().__init__(arm=arm, can=can, model=model, hz=hz,
+                         payload_mass=payload_mass, payload_com=payload_com)
+        self.kp = np.asarray(kp, float) * np.ones(6)
+        self.kd = np.asarray(kd, float) * np.ones(6)
+        self._q_ref = None if q_ref is None else np.asarray(q_ref, float).copy()
+
+    def start(self):
+        if self._q_ref is None:
+            self._q_ref = self.q()      # hold where the arm stands
+        return super().start()
+
+    # q_ref is swapped atomically (GIL) - safe to call from any thread
+    def set_target(self, q):
+        """Retarget the spring; the arm moves compliantly toward q."""
+        self._q_ref = np.asarray(q, float).copy()
+
+    @property
+    def target(self):
+        return None if self._q_ref is None else self._q_ref.copy()
+
+    def move_to(self, q, secs=2.0):
+        """Blocking compliant move: ramp the spring target to q over secs."""
+        q = np.asarray(q, float)
+        q0, t0 = self.target, time.time()
+        while time.time() - t0 < secs:
+            f = min((time.time() - t0) / secs, 1.0)
+            self.set_target(q0 + f * (q - q0))
+            time.sleep(0.01)
+        self.set_target(q)
+
+    def _torques(self, q):
+        return self.mdl.gravity_torque(q), (self._q_ref, self.kp, self.kd)

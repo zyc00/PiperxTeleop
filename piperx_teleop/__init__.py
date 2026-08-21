@@ -12,7 +12,7 @@
 from .arm import JOINT_LIMITS, MOVE_J, MOVE_L, MOVE_P, PiperArm, TeachModeError
 from .cartesian import EULER_SEQ, CartesianTeleop, TeleopState
 from .config import Config, load_config
-from .gravity import GravityCompensator, require_patched_sdk
+from .gravity import GravityCompensator, JointImpedance, require_patched_sdk
 from .model import PiperModel
 from .session import TeleopSession
 from .sources import TeleopSample, TeleopSource
@@ -23,6 +23,6 @@ __all__ = [
     "CartesianTeleop", "TeleopState", "EULER_SEQ",
     "TeleopSession", "TeleopSample", "TeleopSource",
     "Config", "load_config",
-    "GravityCompensator", "require_patched_sdk", "PiperModel",
+    "GravityCompensator", "JointImpedance", "require_patched_sdk", "PiperModel",
     "__version__",
 ]
