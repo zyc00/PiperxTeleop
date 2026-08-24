@@ -50,7 +50,10 @@ VMAX_TICKS = 4
 
 def require_patched_sdk():
     """Raise (with the fix) if this piper_sdk speaks the pre-V1.8-8 MIT frame."""
-    from piper_sdk.piper_msgs.msg_v2.transmit.arm_motion_ctrl_2 import ArmMsgMotionCtrl_2
+    from piper_sdk.piper_msgs.msg_v2.transmit.arm_motion_ctrl_2 import (
+        ArmMsgMotionCtrl_2,
+    )
+
     try:
         ArmMsgMotionCtrl_2(0x01, 0x06, 0, 0xAD)
     except ValueError:
@@ -58,15 +61,17 @@ def require_patched_sdk():
             "this piper_sdk misencodes the MIT frame for firmware S-V1.8-8+ "
             "(8-bit+CRC instead of 12-bit/no-CRC); the arm will silently "
             "ignore every torque command. Use the patched piper_sdk "
-            "(piperctl env).") from None
+            "(piperctl env)."
+        ) from None
 
 
 @dataclass
 class ArmState:
     """What a control law sees each tick."""
-    q: np.ndarray        # joint positions, rad
-    qdot: np.ndarray     # joint velocities, rad/s (finite-differenced)
-    t: float             # seconds since the session went live
+
+    q: np.ndarray  # joint positions, rad
+    qdot: np.ndarray  # joint velocities, rad/s (finite-differenced)
+    t: float  # seconds since the session went live
 
 
 @dataclass
@@ -76,6 +81,7 @@ class MitCommand:
     Any field left None is sent as zeros; a law returning a bare array is
     equivalent to MitCommand(t_ff=array).
     """
+
     t_ff: np.ndarray = None
     p_des: np.ndarray = None
     v_des: np.ndarray = None
@@ -102,7 +108,9 @@ class TorqueSession:
     def __init__(self, law, arm=None, can="can0", hz=200.0):
         require_patched_sdk()
         self.law = law
-        self.arm = arm if arm is not None else PiperArm(can).connect(require_control=False)
+        self.arm = (
+            arm if arm is not None else PiperArm(can).connect(require_control=False)
+        )
         self.piper = self.arm.piper
         self.hz = float(hz)
         self.trip = None
@@ -129,9 +137,11 @@ class TorqueSession:
             return self
         self._ensure_ready()
         if not self._enter_mit():
-            raise RuntimeError("firmware refused MIT mode (mode_feed=%s) - "
-                               "joint out of range or arm error state"
-                               % self.piper.GetArmStatus().arm_status.mode_feed)
+            raise RuntimeError(
+                "firmware refused MIT mode (mode_feed=%s) - "
+                "joint out of range or arm error state"
+                % self.piper.GetArmStatus().arm_status.mode_feed
+            )
         self.trip = None
         self._stop.clear()
         self._recovered.clear()
@@ -173,8 +183,11 @@ class TorqueSession:
         q = self.q()
         margin = np.minimum(q - JOINT_LIMITS[:, 0], JOINT_LIMITS[:, 1] - q)
         if margin.min() < np.radians(2):
-            safe = np.clip(q, JOINT_LIMITS[:, 0] + np.radians(6),
-                           JOINT_LIMITS[:, 1] - np.radians(6))
+            safe = np.clip(
+                q,
+                JOINT_LIMITS[:, 0] + np.radians(6),
+                JOINT_LIMITS[:, 1] - np.radians(6),
+            )
             self._goto_position(safe, secs=2.5)
 
     def _goto_position(self, q, secs=2.0):
@@ -199,7 +212,7 @@ class TorqueSession:
         try:
             self._loop_body()
         except Exception as e:
-            self.trip = "loop error: %r" % (e,)   # never die silently
+            self.trip = "loop error: %r" % (e,)  # never die silently
             try:
                 self._recover(self.q())
             except Exception:
@@ -220,8 +233,14 @@ class TorqueSession:
             cmd = out if isinstance(out, MitCommand) else MitCommand(t_ff=out)
             t_ff, p_des, v_des, kp, kd = cmd.arrays()
             for j in range(6):
-                self.piper.JointMitCtrl(j + 1, float(p_des[j]), float(v_des[j]),
-                                        float(kp[j]), float(kd[j]), float(t_ff[j]))
+                self.piper.JointMitCtrl(
+                    j + 1,
+                    float(p_des[j]),
+                    float(v_des[j]),
+                    float(kp[j]),
+                    float(kd[j]),
+                    float(t_ff[j]),
+                )
 
             if (np.abs(qdot) > VMAX).any():
                 over += 1
